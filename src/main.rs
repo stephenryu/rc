@@ -176,6 +176,14 @@ enum Mode {
     Input { prompt: String, value: String, action: InputAction },
     Viewer { path: PathBuf, content: Vec<String>, scroll: usize },
     Confirm { prompt: String, action: ConfirmAction },
+    Conflict {
+        src: PathBuf,
+        dst: PathBuf,
+        queue: Vec<(PathBuf, PathBuf)>,
+        is_move: bool,
+        done: usize,
+        errors: Vec<String>,
+    },
 }
 
 #[derive(Clone)]
@@ -225,6 +233,7 @@ impl App {
             Mode::Input { .. } => { self.handle_input(code); true }
             Mode::Viewer { .. } => { self.handle_viewer(code); true }
             Mode::Confirm { .. } => { self.handle_confirm(code); true }
+            Mode::Conflict { .. } => { self.handle_conflict(code); true }
         }
     }
 
@@ -316,6 +325,92 @@ impl App {
         }
     }
 
+    fn handle_conflict(&mut self, code: KeyCode) {
+        let Mode::Conflict { src, dst, queue, is_move, done, errors } =
+            std::mem::replace(&mut self.mode, Mode::Normal)
+        else { return };
+
+        match code {
+            // Overwrite this one
+            KeyCode::Char('o') | KeyCode::Char('O') => {
+                let mut errs = errors;
+                self.do_single_copy(&src, &dst, is_move, &mut errs);
+                self.process_copy_queue(queue, is_move, done + 1, errs);
+            }
+            // Overwrite all remaining (including this)
+            KeyCode::Char('a') | KeyCode::Char('A') => {
+                let mut errs = errors;
+                self.do_single_copy(&src, &dst, is_move, &mut errs);
+                let mut remaining = queue;
+                for (s, d) in remaining.drain(..) {
+                    self.do_single_copy(&s, &d, is_move, &mut errs);
+                }
+                self.finish_copy(done + 1 + remaining.len(), errs);
+            }
+            // Skip this one
+            KeyCode::Char('s') | KeyCode::Char('S') => {
+                self.process_copy_queue(queue, is_move, done, errors);
+            }
+            // Skip all remaining
+            KeyCode::Char('n') | KeyCode::Char('N') => {
+                self.finish_copy(done, errors);
+            }
+            // Auto-rename
+            KeyCode::Char('r') | KeyCode::Char('R') => {
+                let new_dst = auto_rename(&dst);
+                let mut errs = errors;
+                self.do_single_copy(&src, &new_dst, is_move, &mut errs);
+                self.process_copy_queue(queue, is_move, done + 1, errs);
+            }
+            // Cancel
+            _ => {
+                self.finish_copy(done, errors);
+            }
+        }
+    }
+
+    fn do_single_copy(&self, src: &Path, dst: &Path, is_move: bool, errors: &mut Vec<String>) {
+        let result = if is_move {
+            fs::rename(src, dst).map(|_| 0u64)
+        } else if src.is_dir() {
+            copy_dir_all(src, dst).map(|_| 0u64)
+        } else {
+            fs::copy(src, dst)
+        };
+        if let Err(e) = result {
+            errors.push(format!("{}: {e}", src.file_name().unwrap_or_default().to_string_lossy()));
+        }
+    }
+
+    fn process_copy_queue(
+        &mut self,
+        mut queue: Vec<(PathBuf, PathBuf)>,
+        is_move: bool,
+        done: usize,
+        mut errors: Vec<String>,
+    ) {
+        while let Some((src, dst)) = queue.first().cloned() {
+            queue.remove(0);
+            if dst.exists() {
+                self.mode = Mode::Conflict { src, dst, queue, is_move, done, errors };
+                return;
+            }
+            self.do_single_copy(&src, &dst, is_move, &mut errors);
+        }
+        self.finish_copy(done + errors.len(), errors);
+    }
+
+    fn finish_copy(&mut self, done: usize, errors: Vec<String>) {
+        if errors.is_empty() {
+            self.message = format!("{} {} item(s)",
+                if done > 0 { "Processed" } else { "Nothing to do:" }, done);
+        } else {
+            self.message = format!("Done ({done} ok) — Errors: {}", errors.join("; "));
+        }
+        self.left.refresh();
+        self.right.refresh();
+    }
+
     // ── file operations ──────────────────────────────────────────────────────
 
     fn open_viewer(&mut self) {
@@ -351,39 +446,21 @@ impl App {
     fn copy_files(&mut self) {
         let (targets, dst_dir) = self.targets_and_dst();
         if targets.is_empty() { return; }
-        let mut errors = vec![];
-        for src in &targets {
-            let dst = dst_dir.join(src.file_name().unwrap_or_default());
-            if src.is_dir() {
-                if let Err(e) = copy_dir_all(src, &dst) { errors.push(e.to_string()); }
-            } else if let Err(e) = fs::copy(src, &dst) {
-                errors.push(e.to_string());
-            }
-        }
-        if errors.is_empty() {
-            self.message = format!("Copied {} item(s) → {}", targets.len(), dst_dir.display());
-        } else {
-            self.message = format!("Errors: {}", errors.join("; "));
-        }
-        self.left.refresh();
-        self.right.refresh();
+        let queue: Vec<(PathBuf, PathBuf)> = targets
+            .into_iter()
+            .map(|s| { let d = dst_dir.join(s.file_name().unwrap_or_default()); (s, d) })
+            .collect();
+        self.process_copy_queue(queue, false, 0, vec![]);
     }
 
     fn move_files(&mut self) {
         let (targets, dst_dir) = self.targets_and_dst();
         if targets.is_empty() { return; }
-        let mut errors = vec![];
-        for src in &targets {
-            let dst = dst_dir.join(src.file_name().unwrap_or_default());
-            if let Err(e) = fs::rename(src, &dst) { errors.push(e.to_string()); }
-        }
-        if errors.is_empty() {
-            self.message = format!("Moved {} item(s) → {}", targets.len(), dst_dir.display());
-        } else {
-            self.message = format!("Errors: {}", errors.join("; "));
-        }
-        self.left.refresh();
-        self.right.refresh();
+        let queue: Vec<(PathBuf, PathBuf)> = targets
+            .into_iter()
+            .map(|s| { let d = dst_dir.join(s.file_name().unwrap_or_default()); (s, d) })
+            .collect();
+        self.process_copy_queue(queue, true, 0, vec![]);
     }
 
     fn prompt_delete(&mut self) {
@@ -429,6 +506,22 @@ impl App {
             ActivePanel::Right => (&self.right, &self.left),
         };
         (src_panel.effective_targets(), dst_panel.cwd.clone())
+    }
+}
+
+fn auto_rename(path: &Path) -> PathBuf {
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+    let ext = path.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    let dir = path.parent().unwrap_or(Path::new("."));
+    let candidate = dir.join(format!("{stem}_copy{ext}"));
+    if !candidate.exists() {
+        return candidate;
+    }
+    let mut n = 2u32;
+    loop {
+        let c = dir.join(format!("{stem}_copy{n}{ext}"));
+        if !c.exists() { return c; }
+        n += 1;
     }
 }
 
@@ -490,6 +583,8 @@ fn ui(f: &mut Frame, app: &mut App) {
         Mode::Input { prompt, value, .. } => render_input(f, area, prompt, value),
         Mode::Viewer { path, content, scroll } => render_viewer(f, area, path, content, *scroll),
         Mode::Confirm { prompt, .. } => render_confirm(f, area, prompt),
+        Mode::Conflict { src, dst, queue, done, .. } =>
+            render_conflict(f, area, src, dst, *done, queue.len()),
         Mode::Normal => {}
     }
 }
@@ -527,6 +622,57 @@ fn render_about(f: &mut Frame, area: Rect) {
     ];
 
     f.render_widget(Paragraph::new(lines).block(block), popup);
+}
+
+fn render_conflict(
+    f: &mut Frame,
+    area: Rect,
+    src: &Path,
+    dst: &Path,
+    done: usize,
+    remaining: usize,
+) {
+    let popup = centered_rect(64, 10, area);
+    f.render_widget(Clear, popup);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow))
+        .title(Span::styled(
+            format!(" File Conflict  ({done} done, {remaining} remaining) "),
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        ));
+
+    let fname = dst.file_name().unwrap_or_default().to_string_lossy();
+    let dst_dir = dst.parent().map(|p| p.to_string_lossy()).unwrap_or_default();
+    let src_dir = src.parent().map(|p| p.to_string_lossy()).unwrap_or_default();
+
+    let lines = vec![
+        Line::from(""),
+        Line::from(vec![
+            Span::raw("  File: "),
+            Span::styled(fname.to_string(), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from(Span::styled(format!("  From: {src_dir}"), Style::default().fg(Color::DarkGray))),
+        Line::from(Span::styled(format!("  To:   {dst_dir}"), Style::default().fg(Color::DarkGray))),
+        Line::from(""),
+        Line::from(vec![
+            key_hint("O", "Overwrite"), Span::raw("  "),
+            key_hint("A", "All"),       Span::raw("  "),
+            key_hint("S", "Skip"),      Span::raw("  "),
+            key_hint("N", "None"),      Span::raw("  "),
+            key_hint("R", "Rename"),    Span::raw("  "),
+            key_hint("Esc", "Cancel"),
+        ]),
+    ];
+
+    f.render_widget(Paragraph::new(lines).block(block), popup);
+}
+
+fn key_hint(key: &str, label: &str) -> Span<'static> {
+    Span::styled(
+        format!("[{key}]{label}"),
+        Style::default().fg(Color::Cyan),
+    )
 }
 
 fn render_input(f: &mut Frame, area: Rect, prompt: &str, value: &str) {
