@@ -45,7 +45,7 @@ pub fn ui(f: &mut Frame, app: &mut App) {
     );
 
     let fkeys = Line::from(vec![
-        key_span("F1", "About"), key_span("F3", "View"), key_span("F4", "Edit"),
+        key_span("F1", "About"), key_span("F2", "Rename"), key_span("F3", "View"), key_span("F4", "Edit"),
         key_span("F5", "Copy"),  key_span("F6", "Move"), key_span("F7", "MkDir"),
         key_span("F8", "Del"),   key_span("^Q", "Quit"),
     ]);
@@ -143,6 +143,7 @@ fn render_about(f: &mut Frame, area: Rect) {
         Line::from("  Tab        Switch panel"),
         Line::from("  Enter      Open dir"),
         Line::from("  Space/Ins  Tag file"),
+        Line::from("  F2         Rename"),
         Line::from("  F3         View file"),
         Line::from("  F4         Edit ($EDITOR)"),
         Line::from("  F5         Copy"),

@@ -30,7 +30,7 @@ pub enum Mode {
 }
 
 #[derive(Clone)]
-pub enum InputAction { Mkdir }
+pub enum InputAction { Mkdir, Rename(PathBuf) }
 
 #[derive(Clone)]
 pub enum ConfirmAction { Delete(Vec<PathBuf>) }
@@ -105,6 +105,7 @@ impl App {
             KeyCode::Char(' ') | KeyCode::Insert => self.active_panel().toggle_select(),
             KeyCode::Enter => self.active_panel().enter(),
             KeyCode::F(1) => { self.mode = Mode::About; }
+            KeyCode::F(2) => self.prompt_rename(),
             KeyCode::F(3) => self.open_viewer(),
             KeyCode::F(4) => self.open_editor(),
             KeyCode::F(5) => self.copy_files(),
@@ -133,6 +134,7 @@ impl App {
                 if !val.is_empty() {
                     match act {
                         InputAction::Mkdir => self.do_mkdir(val),
+                        InputAction::Rename(src) => self.do_rename(src, val),
                     }
                 }
             }
@@ -322,6 +324,28 @@ impl App {
             self.message = format!("Deleted {} item(s)", targets.len());
         } else {
             self.message = format!("Errors: {}", errors.join("; "));
+        }
+        self.left.refresh();
+        self.right.refresh();
+    }
+
+    fn prompt_rename(&mut self) {
+        let panel = match self.active { ActivePanel::Left => &self.left, ActivePanel::Right => &self.right };
+        let Some(entry) = panel.selected_entry() else { return };
+        if entry.name == ".." { return; }
+        let src = panel.cwd.join(&entry.name);
+        self.mode = Mode::Input {
+            prompt: "Rename:".into(),
+            value: entry.name.clone(),
+            action: InputAction::Rename(src),
+        };
+    }
+
+    fn do_rename(&mut self, src: PathBuf, new_name: String) {
+        let dst = src.parent().unwrap_or(src.as_path()).join(&new_name);
+        match fs::rename(&src, &dst) {
+            Ok(_)  => self.message = format!("Renamed to {new_name}"),
+            Err(e) => self.message = format!("Rename error: {e}"),
         }
         self.left.refresh();
         self.right.refresh();
