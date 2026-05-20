@@ -7,7 +7,7 @@ use std::{io, path::PathBuf, time::Duration};
 
 use clap::Parser;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -44,8 +44,10 @@ fn main() -> io::Result<()> {
 
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
-                if !app.handle_key(key.code, key.modifiers) {
-                    break;
+                if key.kind == KeyEventKind::Press {
+                    if !app.handle_key(key.code, key.modifiers) {
+                        break;
+                    }
                 }
             }
         }
