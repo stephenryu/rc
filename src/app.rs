@@ -92,8 +92,10 @@ impl App {
                     ActivePanel::Right => ActivePanel::Left,
                 };
             }
-            KeyCode::Up       => self.active_panel().move_cursor(-1),
-            KeyCode::Down     => self.active_panel().move_cursor(1),
+            KeyCode::Left  => { self.active = ActivePanel::Left; }
+            KeyCode::Right => { self.active = ActivePanel::Right; }
+            KeyCode::Up    => self.active_panel().move_cursor(-1),
+            KeyCode::Down  => self.active_panel().move_cursor(1),
             KeyCode::PageUp   => { let p = self.active_panel(); p.page_move(20, false); }
             KeyCode::PageDown => { let p = self.active_panel(); p.page_move(20, true); }
             KeyCode::Home     => { let p = self.active_panel(); p.state.select(Some(0)); }
