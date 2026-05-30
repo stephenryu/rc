@@ -4,7 +4,8 @@ use std::{
 };
 
 fn state_dir() -> Option<PathBuf> {
-    let home = std::env::var_os("HOME")?;
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))?;
     Some(PathBuf::from(home).join(".rc"))
 }
 

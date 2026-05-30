@@ -6,17 +6,34 @@ pub struct Entry {
     pub name: String,
     pub is_dir: bool,
     pub size: u64,
+    pub is_executable: bool,
 }
 
 impl Entry {
     pub fn from_path(path: &Path) -> Option<Self> {
         let name = path.file_name()?.to_string_lossy().into_owned();
         let meta = fs::metadata(path).ok()?;
+        let is_executable = Self::check_executable(&meta, path);
         Some(Entry {
             name,
             is_dir: meta.is_dir(),
             size: if meta.is_dir() { 0 } else { meta.len() },
+            is_executable,
         })
+    }
+
+    #[cfg(unix)]
+    fn check_executable(meta: &fs::Metadata, _path: &Path) -> bool {
+        use std::os::unix::fs::PermissionsExt;
+        !meta.is_dir() && meta.permissions().mode() & 0o111 != 0
+    }
+
+    #[cfg(windows)]
+    fn check_executable(_meta: &fs::Metadata, path: &Path) -> bool {
+        matches!(
+            path.extension().and_then(|e| e.to_str()),
+            Some("exe" | "bat" | "cmd" | "com")
+        )
     }
 }
 
@@ -52,7 +69,7 @@ impl Panel {
         });
 
         if self.cwd.parent().is_some() {
-            entries.insert(0, Entry { name: "..".into(), is_dir: true, size: 0 });
+            entries.insert(0, Entry { name: "..".into(), is_dir: true, size: 0, is_executable: false });
         }
 
         self.entries = entries;

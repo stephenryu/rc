@@ -108,7 +108,20 @@ impl App {
                 p.state.select(Some(last));
             }
             KeyCode::Char(' ') | KeyCode::Insert => self.active_panel().toggle_select(),
-            KeyCode::Enter => self.active_panel().enter(),
+            KeyCode::Enter => {
+                let is_exec = {
+                    let p = match self.active { ActivePanel::Left => &self.left, ActivePanel::Right => &self.right };
+                    p.selected_entry().map(|e| e.is_executable).unwrap_or(false)
+                };
+                if is_exec {
+                    self.run_file();
+                } else {
+                    self.active_panel().enter();
+                    if self.active == ActivePanel::Left {
+                        let _ = std::env::set_current_dir(&self.left.cwd);
+                    }
+                }
+            }
             KeyCode::F(1) => { self.mode = Mode::About; }
             KeyCode::F(2) => self.prompt_rename(),
             KeyCode::F(3) => self.open_viewer(),
@@ -274,6 +287,22 @@ impl App {
             Err(e)   => vec![Line::raw(format!("Cannot read file: {e}"))],
         };
         self.mode = Mode::Viewer { path, lines, scroll: 0 };
+    }
+
+    fn run_file(&mut self) {
+        let panel = match self.active { ActivePanel::Left => &self.left, ActivePanel::Right => &self.right };
+        let Some(entry) = panel.selected_entry() else { return };
+        if !entry.is_executable { return; }
+        let path = panel.cwd.join(&entry.name);
+
+        let _ = disable_raw_mode();
+        let _ = execute!(io::stdout(), LeaveAlternateScreen);
+        let _ = std::process::Command::new(&path).status();
+        let _ = execute!(io::stdout(), EnterAlternateScreen);
+        let _ = enable_raw_mode();
+        self.needs_clear = true;
+        self.left.refresh();
+        self.right.refresh();
     }
 
     fn open_editor(&mut self) {
