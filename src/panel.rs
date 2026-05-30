@@ -115,6 +115,22 @@ impl Panel {
         }
     }
 
+    pub fn jump_to_char(&mut self, c: char) {
+        let target = c.to_ascii_lowercase();
+        let len = self.entries.len();
+        if len == 0 { return; }
+        let current = self.state.selected().unwrap_or(0);
+        // search from current+1, wrapping — cycles through all matches on repeated key presses
+        for offset in 1..=len {
+            let i = (current + offset) % len;
+            let first = self.entries[i].name.chars().next().unwrap_or('\0').to_ascii_lowercase();
+            if first == target {
+                self.state.select(Some(i));
+                return;
+            }
+        }
+    }
+
     pub fn effective_targets(&self) -> Vec<PathBuf> {
         if self.selected.is_empty() {
             self.selected_entry()

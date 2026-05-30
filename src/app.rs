@@ -120,6 +120,9 @@ impl App {
                 };
             }
             KeyCode::F(8) => self.prompt_delete(),
+            KeyCode::Char(c) if modifiers == KeyModifiers::NONE || modifiers == KeyModifiers::SHIFT => {
+                self.active_panel().jump_to_char(c);
+            }
             _ => {}
         }
         true
