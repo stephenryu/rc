@@ -1,6 +1,7 @@
 mod app;
 mod fs_ops;
 mod panel;
+mod session;
 mod ui;
 
 use std::{io, path::PathBuf, time::Duration};
@@ -38,7 +39,8 @@ fn main() -> io::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new(cli.left, cli.right);
+    let right_path = cli.right.or_else(session::load_right);
+    let mut app = App::new(cli.left, right_path);
     loop {
         terminal.draw(|f| ui(f, &mut app))?;
 
@@ -52,6 +54,7 @@ fn main() -> io::Result<()> {
             }
         }
     }
+    session::save_right(&app.right.cwd);
 
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
