@@ -54,7 +54,7 @@ pub fn ui(f: &mut Frame, app: &mut App) {
     match &app.mode {
         Mode::About => render_about(f, area),
         Mode::Input { prompt, value, .. } => render_input(f, area, prompt, value),
-        Mode::Viewer { path, content, scroll } => render_viewer(f, area, path, content, *scroll),
+        Mode::Viewer { path, lines, scroll } => render_viewer(f, area, path, lines, *scroll),
         Mode::Confirm { prompt, .. } => render_confirm(f, area, prompt),
         Mode::Conflict { src, dst, queue, done, .. } =>
             render_conflict(f, area, src, dst, *done, queue.len()),
@@ -222,7 +222,7 @@ fn render_confirm(f: &mut Frame, area: Rect, prompt: &str) {
     f.render_widget(Paragraph::new(prompt.to_string()).block(block), popup);
 }
 
-fn render_viewer(f: &mut Frame, area: Rect, path: &Path, content: &[String], scroll: usize) {
+fn render_viewer(f: &mut Frame, area: Rect, path: &Path, lines: &[Line], scroll: usize) {
     let popup = centered_rect(90, 90, area);
     f.render_widget(Clear, popup);
     let title = format!(" {} ", path.file_name().unwrap_or_default().to_string_lossy());
@@ -234,14 +234,14 @@ fn render_viewer(f: &mut Frame, area: Rect, path: &Path, content: &[String], scr
     let inner = block.inner(popup);
     f.render_widget(block, popup);
 
-    let visible: Vec<ListItem> = content
+    let visible: Vec<ListItem> = lines
         .iter()
         .skip(scroll)
         .take(inner.height as usize)
-        .map(|line| ListItem::new(Line::from(Span::raw(line.as_str()))))
+        .map(|line| ListItem::new(line.clone()))
         .collect();
 
-    let total = content.len();
+    let total = lines.len();
     let pct = if total == 0 { 0 } else { ((scroll + inner.height as usize) * 100 / total).min(100) };
     let info = format!(" {}/{} ({}%) — ESC to close ", scroll + 1, total, pct);
     let info_area = Rect { y: popup.bottom() - 1, x: popup.x + 1, width: popup.width - 2, height: 1 };

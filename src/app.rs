@@ -1,4 +1,5 @@
 use std::{fs, io, path::{Path, PathBuf}};
+use ratatui::text::Line;
 
 use crossterm::{
     event::{KeyCode, KeyModifiers},
@@ -17,7 +18,7 @@ pub enum Mode {
     Normal,
     About,
     Input { prompt: String, value: String, action: InputAction },
-    Viewer { path: PathBuf, content: Vec<String>, scroll: usize },
+    Viewer { path: PathBuf, lines: Vec<Line<'static>>, scroll: usize },
     Confirm { prompt: String, action: ConfirmAction },
     Conflict {
         src: PathBuf,
@@ -150,8 +151,8 @@ impl App {
     }
 
     fn handle_viewer(&mut self, code: KeyCode) {
-        let Mode::Viewer { ref content, ref mut scroll, .. } = self.mode else { return };
-        let max = content.len().saturating_sub(1);
+        let Mode::Viewer { ref lines, ref mut scroll, .. } = self.mode else { return };
+        let max = lines.len().saturating_sub(1);
         match code {
             KeyCode::Esc | KeyCode::F(3) | KeyCode::Char('q') => { self.mode = Mode::Normal; }
             KeyCode::Up       => { *scroll = scroll.saturating_sub(1); }
@@ -264,11 +265,11 @@ impl App {
         let Some(entry) = panel.selected_entry() else { return };
         if entry.is_dir || entry.name == ".." { return; }
         let path = panel.cwd.join(&entry.name);
-        let content = match fs::read_to_string(&path) {
-            Ok(s)  => s.lines().map(String::from).collect(),
-            Err(e) => vec![format!("Cannot read file: {e}")],
+        let lines = match fs::read_to_string(&path) {
+            Ok(text) => crate::highlight::highlight(&path, &text),
+            Err(e)   => vec![Line::raw(format!("Cannot read file: {e}"))],
         };
-        self.mode = Mode::Viewer { path, content, scroll: 0 };
+        self.mode = Mode::Viewer { path, lines, scroll: 0 };
     }
 
     fn open_editor(&mut self) {

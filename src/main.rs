@@ -1,5 +1,6 @@
 mod app;
 mod fs_ops;
+mod highlight;
 mod panel;
 mod session;
 mod ui;

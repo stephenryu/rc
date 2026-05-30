@@ -7,3 +7,4 @@ edition = "2024"
 ratatui = "0.29"
 crossterm = "0.28"
 clap = { version = "4", features = ["derive"] }
+syntect = { version = "5", default-features = false, features = ["default-fancy"] }
