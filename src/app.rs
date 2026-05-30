@@ -47,6 +47,7 @@ pub struct App {
     pub active: ActivePanel,
     pub message: String,
     pub mode: Mode,
+    pub needs_clear: bool,
 }
 
 impl App {
@@ -60,6 +61,7 @@ impl App {
             active: ActivePanel::Left,
             message: String::new(),
             mode: Mode::Normal,
+            needs_clear: false,
         }
     }
 
@@ -73,7 +75,7 @@ impl App {
     pub fn handle_key(&mut self, code: KeyCode, modifiers: KeyModifiers) -> bool {
         match &self.mode {
             Mode::Normal       => self.handle_normal(code, modifiers),
-            Mode::About        => { self.mode = Mode::Normal; true }
+            Mode::About        => { self.mode = Mode::Normal; self.needs_clear = true; true }
             Mode::Input { .. } => { self.handle_input(code); true }
             Mode::Viewer { .. }  => { self.handle_viewer(code); true }
             Mode::Confirm { .. } => { self.handle_confirm(code); true }
@@ -132,11 +134,12 @@ impl App {
     fn handle_input(&mut self, code: KeyCode) {
         let Mode::Input { ref mut value, ref action, .. } = self.mode else { return };
         match code {
-            KeyCode::Esc => { self.mode = Mode::Normal; }
+            KeyCode::Esc => { self.mode = Mode::Normal; self.needs_clear = true; }
             KeyCode::Enter => {
                 let val = value.trim().to_string();
                 let act = action.clone();
                 self.mode = Mode::Normal;
+                self.needs_clear = true;
                 if !val.is_empty() {
                     match act {
                         InputAction::Mkdir => self.do_mkdir(val),
@@ -154,7 +157,7 @@ impl App {
         let Mode::Viewer { ref lines, ref mut scroll, .. } = self.mode else { return };
         let max = lines.len().saturating_sub(1);
         match code {
-            KeyCode::Esc | KeyCode::F(3) | KeyCode::Char('q') => { self.mode = Mode::Normal; }
+            KeyCode::Esc | KeyCode::F(3) | KeyCode::Char('q') => { self.mode = Mode::Normal; self.needs_clear = true; }
             KeyCode::Up       => { *scroll = scroll.saturating_sub(1); }
             KeyCode::Down     => { *scroll = (*scroll + 1).min(max); }
             KeyCode::PageUp   => { *scroll = scroll.saturating_sub(20); }
@@ -174,7 +177,7 @@ impl App {
                     ConfirmAction::Delete(targets) => self.do_delete(targets),
                 }
             }
-            _ => { self.mode = Mode::Normal; }
+            _ => { self.mode = Mode::Normal; self.needs_clear = true; }
         }
     }
 
@@ -248,6 +251,7 @@ impl App {
     }
 
     fn finish_copy(&mut self, done: usize, errors: Vec<String>) {
+        self.needs_clear = true;
         if errors.is_empty() {
             self.message = format!("{} {} item(s)",
                 if done > 0 { "Processed" } else { "Nothing to do:" }, done);
@@ -284,6 +288,7 @@ impl App {
         let _ = std::process::Command::new(&editor).arg(&path).status();
         let _ = execute!(io::stdout(), EnterAlternateScreen);
         let _ = enable_raw_mode();
+        self.needs_clear = true;
 
         self.left.refresh();
         self.right.refresh();

@@ -51,6 +51,10 @@ fn main() -> io::Result<()> {
                     if !app.handle_key(key.code, key.modifiers) {
                         break;
                     }
+                    if app.needs_clear {
+                        app.needs_clear = false;
+                        terminal.clear()?;
+                    }
                 }
             }
         }

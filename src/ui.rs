@@ -125,6 +125,7 @@ fn render_about(f: &mut Frame, area: Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Cyan))
+        .style(Style::default().bg(Color::Black))
         .title(Span::styled(
             " About rc ",
             Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
@@ -171,6 +172,7 @@ fn render_conflict(
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Yellow))
+        .style(Style::default().bg(Color::Black))
         .title(Span::styled(
             format!(" File Conflict  ({done} done, {remaining} remaining) "),
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
@@ -208,6 +210,7 @@ fn render_input(f: &mut Frame, area: Rect, prompt: &str, value: &str) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Yellow))
+        .style(Style::default().bg(Color::Black))
         .title(Span::styled(" Input ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)));
     f.render_widget(Paragraph::new(format!("{prompt}\n> {value}_")).block(block), popup);
 }
@@ -218,6 +221,7 @@ fn render_confirm(f: &mut Frame, area: Rect, prompt: &str) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Red))
+        .style(Style::default().bg(Color::Black))
         .title(Span::styled(" Confirm ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)));
     f.render_widget(Paragraph::new(prompt.to_string()).block(block), popup);
 }
@@ -229,6 +233,7 @@ fn render_viewer(f: &mut Frame, area: Rect, path: &Path, lines: &[Line], scroll:
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::Green))
+        .style(Style::default().bg(Color::Black))
         .title(Span::styled(title, Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)));
 
     let inner = block.inner(popup);
