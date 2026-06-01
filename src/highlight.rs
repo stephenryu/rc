@@ -31,7 +31,7 @@ pub fn highlight(path: &Path, text: &str) -> Vec<Line<'static>> {
                 .map(|(style, text)| {
                     let fg = style.foreground;
                     Span::styled(
-                        text.trim_end_matches('\n').replace('\t', "    ").to_owned(),
+                        text.trim_end_matches(|c: char| c == '\n' || c == '\r').replace('\t', "    ").to_owned(),
                         Style::default().fg(Color::Rgb(fg.r, fg.g, fg.b)).bg(Color::Black),
                     )
                 })
