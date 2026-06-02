@@ -119,3 +119,18 @@ cargo clippy      # 린트
 cargo fmt         # 포맷
 cargo test        # 테스트
 ```
+
+## 크로스 컴파일 (Linux x64)
+
+Docker Desktop이 실행 중인 상태에서 `cross`로 Linux 바이너리를 빌드할 수 있습니다.
+
+```bash
+# 최초 1회 설정
+cargo install cross
+rustup target add x86_64-unknown-linux-gnu
+
+# 빌드
+cross build --target x86_64-unknown-linux-gnu --release
+```
+
+결과물: `target/x86_64-unknown-linux-gnu/release/rc`
